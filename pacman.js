@@ -16,18 +16,18 @@ const map = [
     "X XX X XXXXX X X XX",
     "X    X       X    X",
     "XX X   XXXXX X XX X",
-    "X  XXXXX          X",
-    "XXXX   X XXXXX X XX",
-    "O    X   X     X  O",
+    "X  XXXXX       X  X",
+    "X XX   X XXXXX X XX",
+    "O    X   X        O",
     "X XX XXX X X X XX X",
     "X        X X X    X",
     "X XXXX XXX X XXXX X",
     "X          X      X",
     "X XXXXXXX XXXX XX X",
-    "X  X     P     X  X",
-    "XX X X XX XX X X  X",
+    "X  X     P        X",
+    "XX X X XX XX X XX X",
     "X    X    X  X    X",
-    "X XX XXX XX XXXXX X",
+    "X XX XXXX X XXXXX X",
     "Xp        X      bX",
     "XXXXOXXXXXXXXXXXXXX" 
 ];
@@ -37,6 +37,14 @@ const walls = new Set();
 const foods = new Set();
 const ghosts = new Set();
 let pacman;
+
+//scoreboard
+let heart_count = 3;
+let hearts;
+const score_value = {food : 10, ghost: 100}
+let score = 0;
+let win_con = 0;
+let game_over = false
 
 //ghost directions
 const directions = ["U", "D", "L", "R", "U", "D"];
@@ -90,7 +98,7 @@ class Block{
         this.start_x = x;
         this.start_y = y;
 
-        this.direction = "";
+        this.direction = "R";
         this.velocity_x = 0;
         this.velocity_y = 0;
 
@@ -106,7 +114,9 @@ class Block{
         this.y += this.velocity_y;
 
         for(let wall of walls.values()) {
+
             if (collision(wall, this)) {
+
                 this.x -= this.velocity_x;
                 this.y -= this.velocity_y;
                 this.direction = prev_direction;
@@ -166,6 +176,31 @@ class Block{
             this.y = 0;
         }
     }
+
+    //function for resetting position of pacman and ghosts
+    reset_pos() {
+        
+        for (let ghost of ghosts.values()) {
+
+            ghost.x = ghost.start_x;
+            ghost.y = ghost.start_y;
+            ghost.velocity_x = 0;
+            ghost.velocity_y = 0;
+        }
+
+        pacman.x = pacman.start_x;
+        pacman.y = pacman.start_y;
+        pacman.velocity_x = 0;
+        pacman.velocity_y = 0;
+        pacman.image = ipacman_right;
+
+        heart_count -= 1
+
+        if (heart_count < 1) {
+
+            game_over = true
+        }
+    }
 }
 
 function load_game() {
@@ -212,6 +247,7 @@ function load_game() {
             else if (tile_map_char == " ") {
                 const food = new Block(null, x + 14, y + 14, 4, 4);
                 foods.add(food);
+                win_con += score_value["food"];
             }
         }
     }
@@ -235,14 +271,51 @@ function draw() {
     }
 
     //food
-    context.fillStyle = "white"
+    context.fillStyle = "white";
     for (let food of foods.values()) {
         context.fillRect(food.x, food.y, food.width, food.height);
     }
+
+    //score
+    context.fillStyle = "white";
+    context.font = "14px sans-serif";
+    context.fillText("x" + String(heart_count) + " " + String(score), tile_size / 2, tile_size / 2)
+
+    //restart game
+    if (game_over){
+        context.globalAlpha = 0.8; //global transparency 80%
+        context.fillStyle = "grey";
+        context.fillRect(0, 0, board_width, board_height);
+        context.globalAlpha = 1; //global transparency back to 100% for further use
+        context.fillStyle = "white";
+        context.textAlign = "center"
+        context.font = "72px sans-serif";
+        
+        if (score >= win_con) {
+            context.fillText('You Won!', board_width / 2, board_height / 2);
+        }
+        else {
+            context.fillText('Game Over!', board_width / 2, board_height / 2);
+        }
+        context.font = "32px sans-serif";
+        context.fillText('Press any key to restart', board_width / 2, board_height / 2 + 72);
+        heart_count = 3
+        score = 0
+        win_con = 0
+        load_game();
+    }
 }
 
-//check keyboard input to update direction of entity
+
+//check keyboard input to update direction of entity 
 function pacman_direction(e) {
+
+    game_over = false
+
+    for (let ghost of ghosts.values()) {
+        const new_direction = directions[Math.floor(Math.random() * 6)];
+        ghost.update_direction(new_direction);
+    }
 
     if (e.code == "ArrowUp" || e.code == "KeyW") {
         pacman.update_direction("U");
@@ -266,7 +339,7 @@ function move() {
     pacman.x += pacman.velocity_x;
     pacman.y += pacman.velocity_y;
 
-    //check for collision
+    //check for collision with wall
     for (let wall of walls.values()) {
 
         if (collision(wall, pacman)) {
@@ -275,6 +348,24 @@ function move() {
             break;
         }
     }
+
+    //check for collision with food
+    let food_eaten = null
+    for (let food of foods.values()) {
+
+        if (collision(food, pacman)) {
+            food_eaten = food;
+            score += score_value["food"];
+            break;
+            
+        }
+    }
+    foods.delete(food_eaten)
+
+    if (score >= win_con) {
+        game_over = true
+    }
+
     //if pacman enters open hole, he teleports to the other side
     pacman.update_pos()
 
@@ -285,7 +376,7 @@ function move() {
         ghost.x += ghost.velocity_x;
         ghost.y += ghost.velocity_y;
 
-        //check for collision
+        //check for collision with wall
         for (let wall of walls.values()) {
 
             if (collision(wall, ghost)) {
@@ -297,6 +388,12 @@ function move() {
             }
         }
 
+        //check for collision with pacman
+        if (collision(pacman, ghost)) {
+
+            pacman.reset_pos()
+        }
+
         //if ghost enters open hole, he teleports to the other side
         ghost.update_pos()
     }
@@ -305,24 +402,18 @@ function move() {
 //function for collision written in a_direction, b_direction to visualise the collision points
 function collision(a, b) {
 
-    const a_right = a.x;
-    const a_left = a.x + a.width;
-    const a_top = a.y;
-    const a_bottom = a.y + a.height;
-    
-    const b_right = b.x;
-    const b_left = b.x + a.width;
-    const b_top = b.y;
-    const b_bottom = b.y + a.height;
-    
-
-    return  a_right < b_left &&
-            a_left > b_right &&
-            a_top < b_bottom &&
-            a_bottom > b_top;
+    return  a.x < b.x + b.width  &&
+            a.x + a.width > b.x &&
+            a.y < b.y + b.height &&
+            a.y + a.height > b.y;
 }
 
 function update() {
+    
+    //console.log(heart_count);
+    //console.log(score);
+    //console.log(win_con);
+
     move();
     draw();
     setTimeout(update, 50); //20fps
@@ -341,14 +432,7 @@ window.onload = function() {
     //console.log(walls.size);
     //console.log(foods.size);
     //console.log(ghosts.size);
- 
+        
     update();
-    this.document.addEventListener("keydown", pacman_direction);
-    
-    for (ghost of ghosts.values()) {
-        const new_direction = directions[Math.floor(Math.random() * 6)];
-        ghost.update_direction(new_direction);
-    }
-    
-   
+    this.document.addEventListener("keydown", pacman_direction); 
 }
